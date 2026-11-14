@@ -1,0 +1,10 @@
+{
+  "name": "player-queue",
+  "version": "1.0.0",
+  "title": "Player Queue",
+  "author": "Wilexcess",
+  "homepage": "https://github.com/Weroxin/factorio-player-queue",
+  "factorio_version": "2.1",
+  "dependencies": ["base >= 2.1"],
+  "description": "Nobody plays until enough players are online. Waiting players are locked in place and biters are frozen, while factories and research keep running. Optional Discord notifications."
+}
