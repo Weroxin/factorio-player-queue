@@ -12,7 +12,11 @@ Made for small groups playing PvP (or co-op) on a dedicated server, where nobody
 - **The factory keeps running.** Production, research and trains all continue.
 - A **"Waiting for players: 2/3"** box shows at the top of the screen, and joins and leaves are announced in chat.
 
-When the minimum is reached, everyone is released together with a server-wide message, and biter settings go back to exactly what they were.
+When the minimum is reached, everyone is released together with a server-wide message, and biter settings go back to exactly what the server had before the freeze.
+
+## When someone leaves mid-game
+
+Everyone keeps playing for a **grace period** (default 5 minutes), with a countdown at the top of the screen. If someone joins before it runs out, the lock is cancelled. Otherwise everyone is locked and the biters are frozen again.
 
 ## Settings (Map settings tab, changeable mid-game)
 
@@ -20,6 +24,7 @@ When the minimum is reached, everyone is released together with a server-wide me
 |---|---|---|
 | Minimum players | 3 | Players needed before anyone can play |
 | Re-lock when count drops | On | Lock everyone again if players leave. If off, the game continues until the server is empty. |
+| Re-lock grace period | 5 min | How long play continues after someone leaves before the lock. 0 = lock immediately. |
 | Counted players | *(blank)* | Comma-separated usernames. Only these count toward the minimum. Blank means everyone counts. |
 | Count admins | On | If off, admins don't count (they are still locked while waiting) |
 
@@ -33,6 +38,7 @@ Works from the server console, over RCON, or in chat. Unlike `/c`, it **does not
 /queue                      show status
 /queue min 3                set the minimum (admins)
 /queue relock on|off
+/queue grace 5              grace period in minutes (0 = immediate)
 /queue admins on|off
 /queue allow amy, bob       only these count ("-" = everyone)
 ```
@@ -46,7 +52,7 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \
   python3 discord_notifier.py /path/to/factorio/script-output/player-queue/events.jsonl
 ```
 
-Run it on the server machine. Example messages: *"⏳ amy is waiting: 1/3, need 2 more!"*, *"🟢 Game on! 3/3 online"*. Player names can't trigger @mentions.
+Run it on the server machine. Example messages: *"⏳ amy is waiting: 1/3, need 2 more!"*, *"🟢 Game on! 3/3 online"*, *"⚠️ bob left. 2/3: everyone gets locked in 5 min unless 1 more join!"*. Player names can't trigger @mentions.
 
 ## Compatibility
 

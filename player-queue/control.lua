@@ -96,48 +96,78 @@ local function set_biters_frozen(frozen)
   end
 end
 
--- event: "join" | "leave" | "settings"; who: player name for join/leave
+local function show(p, caption)
+  local f = p.gui.top.pq_status or p.gui.top.add{type = "frame", name = "pq_status"}
+  f.caption = caption
+end
+
+local function countdown()
+  local s = math.max(0, math.ceil((storage.grace_until - game.tick) / 60))
+  return ("%d:%02d"):format(math.floor(s / 60), s % 60)
+end
+
+-- event: "join" | "leave" | "settings" | "tick"; who: player name for join/leave
 local function sync(event, who)
   local names = counted_players()
   local n, need, online = #names, cfg("min-players"), #game.connected_players
+  local relock = cfg("relock-on-drop")
 
-  local released = storage.released
+  local released, had_grace = storage.released, storage.grace_until ~= nil
   if online == 0 then released = false -- session over: next session queues again
   elseif n >= need then released = true
-  elseif cfg("relock-on-drop") then released = false end
+  elseif released and relock then
+    -- dropped below the minimum mid-game: keep playing for the grace period, then lock
+    storage.grace_until = storage.grace_until or game.tick + cfg("relock-grace") * 3600
+    if game.tick >= storage.grace_until then released = false end
+  end
+  if not released or n >= need or not relock then storage.grace_until = nil end
+  local grace = storage.grace_until ~= nil
 
   if released ~= storage.released and online > 0 then
     event = released and "released" or "relocked"
     game.print(released
       and ("[Player Queue] %d/%d players online. GO!"):format(n, need)
-      or ("[Player Queue] Dropped to %d/%d players. Everyone is locked until more join."):format(n, need),
+      or ("[Player Queue] Down to %d/%d players. Everyone is locked until more join."):format(n, need),
       {color = released and {0.3, 1, 0.3} or {1, 0.4, 0.3}})
+  elseif grace and not had_grace then
+    event = "grace"
+    game.print(("[Player Queue] Down to %d/%d players. Everyone will be locked in %d min unless someone joins."):format(
+      n, need, cfg("relock-grace")), {color = {1, 0.8, 0.3}})
+  elseif had_grace and not grace and released then
+    game.print(("[Player Queue] Relock cancelled (%d/%d players)."):format(n, need), {color = {0.3, 1, 0.3}})
   end
   storage.released = released
   set_biters_frozen(not released)
 
-  local status = ("Waiting for players: %d/%d"):format(n, need)
   if released then
+    local caption = grace and ("Locking in %s unless someone joins: %d/%d"):format(countdown(), n, need)
     for _, p in pairs(game.players) do
       unlock(p)
-      if p.gui.top.pq_status then p.gui.top.pq_status.destroy() end
+      if caption and p.connected then show(p, caption)
+      elseif p.gui.top.pq_status then p.gui.top.pq_status.destroy() end
     end
   else
     local g = game.permissions.get_group(GROUP) or setup_group()
+    local status = ("Waiting for players: %d/%d"):format(n, need)
     for _, p in pairs(game.connected_players) do
       lock(p, g)
-      local f = p.gui.top.pq_status or p.gui.top.add{type = "frame", name = "pq_status"}
-      f.caption = status
+      show(p, status)
     end
     if event == "join" or event == "leave" then game.print("[Player Queue] " .. status) end
   end
 
-  if event ~= "settings" then
+  if event ~= "settings" and event ~= "tick" then
     helpers.write_file(OUT, helpers.table_to_json{
       event = event, player = who, count = n, needed = need, players = names, released = released,
+      grace_minutes = cfg("relock-grace"),
     } .. "\n", true, 0) -- 0 = written on the server only
   end
 end
+
+-- Grace-period clock: once a second, refresh the countdown and lock when it runs out.
+script.on_nth_tick(60, function()
+  if storage.grace_until then sync("tick") end
+end)
 
 local function init()
   storage.prev_group = storage.prev_group or {}
@@ -158,9 +188,9 @@ end)
 
 -- Headless-friendly control: works from the server console, RCON, or in-game chat,
 -- and unlike /c it doesn't disable achievements.
-local OPTIONS = {min = "min-players", relock = "relock-on-drop", admins = "count-admins", allow = "allowed-players"}
+local OPTIONS = {min = "min-players", relock = "relock-on-drop", grace = "relock-grace", admins = "count-admins", allow = "allowed-players"}
 local BOOL = {on = true, ["true"] = true, off = false, ["false"] = false}
-commands.add_command("queue", "Queue status. Admins: /queue min <n> | relock on|off | admins on|off | allow <names, or - for everyone>", function(cmd)
+commands.add_command("queue", "Queue status. Admins: /queue min <n> | relock on|off | grace <minutes> | admins on|off | allow <names, or - for everyone>", function(cmd)
   local caller = cmd.player_index and game.get_player(cmd.player_index)
   local function reply(msg)
     if caller then caller.print(msg) else rcon.print(msg); print(msg) end
@@ -168,12 +198,13 @@ commands.add_command("queue", "Queue status. Admins: /queue min <n> | relock on|
   local key, val = (cmd.parameter or ""):match("^(%S+)%s*(.-)%s*$")
   if key then
     local name = OPTIONS[key]
-    if not name then return reply("Unknown option '" .. key .. "'. Use min, relock, admins or allow.") end
+    if not name then return reply("Unknown option '" .. key .. "'. Use min, relock, grace, admins or allow.") end
     if caller and not caller.admin then return reply("Only admins can change queue settings.") end
     local cur, v = cfg(name), nil
     if type(cur) == "number" then
+      local lo, hi = key == "min" and 1 or 0, key == "min" and 1000 or 1440 -- match settings.lua limits
       v = tonumber(val)
-      if not v or v < 1 or v % 1 ~= 0 then return reply("min needs a whole number >= 1") end
+      if not v or v < lo or v > hi or v % 1 ~= 0 then return reply(("%s needs a whole number from %d to %d"):format(key, lo, hi)) end
     elseif type(cur) == "boolean" then
       v = BOOL[val]
       if v == nil then return reply(key .. " needs on or off") end
@@ -184,9 +215,11 @@ commands.add_command("queue", "Queue status. Admins: /queue min <n> | relock on|
     sync("settings")
   end
   local names = counted_players()
-  reply(("[Player Queue] %s, %d/%d counted online (%s). relock=%s admins=%s allow=%s"):format(
-    storage.released and "running" or "waiting (players locked, biters frozen)",
+  reply(("[Player Queue] %s, %d/%d counted online (%s). relock=%s grace=%dmin admins=%s allow=%s"):format(
+    not storage.released and "waiting (players locked, biters frozen)"
+      or storage.grace_until and ("running, locking in " .. countdown())
+      or "running",
     #names, cfg("min-players"), table.concat(names, ", "),
-    tostring(cfg("relock-on-drop")), tostring(cfg("count-admins")),
+    tostring(cfg("relock-on-drop")), cfg("relock-grace"), tostring(cfg("count-admins")),
     cfg("allowed-players") == "" and "everyone" or cfg("allowed-players")))
 end)

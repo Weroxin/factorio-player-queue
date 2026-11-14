@@ -23,6 +23,7 @@ def fmt(e):
     return {
         "released": f"🟢 {by}**Game on!** {n}/{need} online: {names}",
         "relocked": f"🔴 {by}Game locked at {n}/{need}. Need {need - n} more!",
+        "grace": f"⚠️ {by}{n}/{need}: everyone gets locked in {e.get('grace_minutes', '?')} min unless {need - n} more join!",
         "join": f"➕ **{who}** joined, game in progress ({names})" if e.get("released")
         else f"⏳ **{who}** is waiting: {n}/{need}, need {need - n} more!",
         "leave": f"➖ **{who}** left: {n}/{need}",
@@ -74,6 +75,7 @@ def selftest():
     assert "Game on!" in fmt({**e, "event": "released", "count": 3}) and "bob** joined" in fmt({**e, "event": "released"})
     assert "Need 1 more" in fmt({**e, "event": "relocked"}) and "left" in fmt({**e, "event": "relocked"})
     assert "game in progress" in fmt({**e, "event": "join", "released": True})
+    assert fmt({**e, "event": "grace", "grace_minutes": 5}) == "⚠️ **bob** left. 2/3: everyone gets locked in 5 min unless 1 more join!"
     assert fmt({**e, "event": "leave", "players": {}}) == "➖ **bob** left: 2/3"  # Lua empty table -> {}
     assert "nobody" in fmt({"event": "released", "count": 0, "needed": 0, "players": {}})
     print("ok")
