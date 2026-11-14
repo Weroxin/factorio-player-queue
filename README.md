@@ -7,7 +7,7 @@ Made for small groups playing PvP (or co-op) on a dedicated server, where nobody
 ## While waiting
 
 - **Players are locked.** They can't move, mine, build, craft, shoot, drive, research, or open entities and inventories. Chat still works.
-- **Vehicles stop.** Cars brake, spidertrons drop their autopilot route, and a train being driven by hand stops. Automatic trains keep running.
+- **Vehicles stop.** Cars, spidertrons and manually driven trains stop, and their drivers are put out next to them (press Enter to get back in once released). Automatic trains keep running.
 - **Biters are frozen.** They won't attack any player team, and evolution and expansion are paused. Your turrets still fire, so attack waves and asteroids are still dealt with.
 - **The factory keeps running.** Production, research and trains all continue.
 - A **"Waiting for players: 2/3"** box shows at the top of the screen, and joins and leaves are announced in chat.

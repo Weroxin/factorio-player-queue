@@ -35,21 +35,25 @@ local function halt(p)
   p.opened = nil
   local c = p.character
   if not c then return end
-  c.walking_state = {walking = false, direction = defines.direction.north} -- also stops a driven spidertron
-  c.shooting_state = {state = defines.shooting.not_shooting, position = c.position}
   local v = c.vehicle
-  if not v then return end
-  if v.type == "spider-vehicle" then
-    v.autopilot_destination = nil
-    v.follow_target = nil
-  elseif v.type == "car" then
-    local d = v.get_driver()
-    if d == c or d == p then c.riding_state = {acceleration = defines.riding.acceleration.braking, direction = defines.riding.direction.straight} end
-  elseif v.train and v.train.manual_mode then
-    -- manual train would keep its last throttle input; automatic trains are production, leave them
-    v.train.speed = 0
+  -- Stop the vehicle itself and get out. Never script the driving input
+  -- (riding_state/walking_state) while seated: the client keeps its own copy of that
+  -- input, and overwriting it froze the player in the car until they rejoined.
+  -- Automatic trains are production: passengers just ride along.
+  if v and not (v.train and not v.train.manual_mode) then
+    if v.type == "car" then
+      v.speed = 0
+    elseif v.type == "spider-vehicle" then
+      v.autopilot_destination = nil
+      v.follow_target = nil
+    elseif v.train then
+      v.train.speed = 0
+    end
     c.driving = false
   end
+  if c.vehicle then return end -- still seated (automatic train, or no room to get out)
+  c.walking_state = {walking = false, direction = defines.direction.north}
+  c.shooting_state = {state = defines.shooting.not_shooting, position = c.position}
 end
 
 local function lock(p, g)
